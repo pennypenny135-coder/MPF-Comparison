@@ -16,7 +16,7 @@ export function exportFundResultsCSV(funds: FundWithReturn[], periods?: ReturnPe
   downloadCsv(rows, "mpf-fund-results.csv");
 }
 
-export function exportTrusteeStatsCSV(stats: TrusteeStatsRow[], topN?: number, period?: string) {
+export function exportTrusteeStatsCSV(stats: TrusteeStatsRow[], topN?: number, period?: ReturnPeriod) {
   const rows = stats.map((stat) => ({ ...(stat as Record<string, unknown>), TopN: topN ?? "", 期間: period ?? "" }));
   downloadCsv(rows, "mpf-trustee-stats.csv");
 }
