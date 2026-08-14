@@ -1,9 +1,11 @@
 @import "tailwindcss";
 
-:root { color-scheme: dark; --bg: #0b1220; --fg: #e5e7eb; --card: #111827; --border: #374151; }
-html[data-theme="light"] { color-scheme: light; --bg: #f8fafc; --fg: #111827; --card: #ffffff; --border: #d1d5db; }
+:root { color-scheme: light; --bg: #f8fafc; --fg: #111827; --card: #ffffff; --border: #d1d5db; }
+html[data-theme="dark"] { color-scheme: dark; --bg: #0b1220; --fg: #e5e7eb; --card: #111827; --border: #374151; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); }
 .card, .bg-white, .bg-gray-50 { background: var(--card) !important; color: var(--fg); }
 .border, .border-gray-200, .border-gray-300 { border-color: var(--border) !important; }
 input, select, button { color: inherit; background-color: var(--card); border-color: var(--border); }
+button svg, a svg { background: transparent !important; fill: none !important; }
+.rounded-full button, span button { background-color: transparent !important; }
