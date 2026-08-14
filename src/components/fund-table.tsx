@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { ArrowUpDown, ArrowUp, ArrowDown, Download } from "lucide-react";
 import type { FundWithReturn, ReturnPeriod, ReturnMode } from "@/types/mpf";
 import { exportFundResultsCSV } from "@/lib/csv-export";
+import { periodKey } from "@/lib/returns";
 
 interface FundTableProps {
   funds: FundWithReturn[];
@@ -20,12 +21,13 @@ type SortKey =
   | "riskLevel"
   | "fundSizeMillion"
   | "fer"
-  | "periodReturn";
+  | "periodReturn"
+  | string;
 
 type SortDir = "asc" | "desc";
 
-function ReturnCell({ value }: { value: number | null }) {
-  if (value === null || !Number.isFinite(value)) {
+function ReturnCell({ value }: { value: number | null | undefined }) {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
     return (
       <span className="text-slate-400 cursor-help" title="期間資料不完整">
         —
@@ -62,52 +64,62 @@ export function FundTable({ funds, periods, returnMode }: FundTableProps) {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
 
-  const periodLabel = periods[0]?.label ?? "回報";
+  const activePeriods = periods.length > 0 ? periods : [];
+  const primaryKey = activePeriods[0] ? periodKey(activePeriods[0]) : null;
 
-  // Sort
+  const getPeriodValue = (fund: FundWithReturn, key: string): number | null => {
+    const value = fund.returnsByPeriod?.[key];
+    return value === undefined ? null : value;
+  };
+
   const sorted = useMemo(() => {
     return [...funds].sort((a, b) => {
       let aVal: number | string | null = null;
       let bVal: number | string | null = null;
 
-      switch (sortKey) {
-        case "rank":
-          return 0;
-        case "trustee":
-          aVal = a.trustee ?? "";
-          bVal = b.trustee ?? "";
-          break;
-        case "scheme":
-          aVal = a.scheme ?? "";
-          bVal = b.scheme ?? "";
-          break;
-        case "fundName":
-          aVal = a.fundName ?? "";
-          bVal = b.fundName ?? "";
-          break;
-        case "fundType":
-          aVal = a.fundType ?? "";
-          bVal = b.fundType ?? "";
-          break;
-        case "riskLevel":
-          aVal = a.riskLevel;
-          bVal = b.riskLevel;
-          break;
-        case "fundSizeMillion":
-          aVal = a.fundSizeMillion;
-          bVal = b.fundSizeMillion;
-          break;
-        case "fer":
-          aVal = a.fer;
-          bVal = b.fer;
-          break;
-        case "periodReturn":
-          aVal = a.periodReturn;
-          bVal = b.periodReturn;
-          break;
+      if (activePeriods.some((p) => periodKey(p) === sortKey)) {
+        aVal = getPeriodValue(a, sortKey);
+        bVal = getPeriodValue(b, sortKey);
+      } else {
+        switch (sortKey) {
+          case "rank":
+            return 0;
+          case "trustee":
+            aVal = a.trustee ?? "";
+            bVal = b.trustee ?? "";
+            break;
+          case "scheme":
+            aVal = a.scheme ?? "";
+            bVal = b.scheme ?? "";
+            break;
+          case "fundName":
+            aVal = a.fundName ?? "";
+            bVal = b.fundName ?? "";
+            break;
+          case "fundType":
+            aVal = a.fundType ?? "";
+            bVal = b.fundType ?? "";
+            break;
+          case "riskLevel":
+            aVal = a.riskLevel;
+            bVal = b.riskLevel;
+            break;
+          case "fundSizeMillion":
+            aVal = a.fundSizeMillion;
+            bVal = b.fundSizeMillion;
+            break;
+          case "fer":
+            aVal = a.fer;
+            bVal = b.fer;
+            break;
+          case "periodReturn":
+          default:
+            aVal = primaryKey ? getPeriodValue(a, primaryKey) : a.periodReturn;
+            bVal = primaryKey ? getPeriodValue(b, primaryKey) : b.periodReturn;
+            break;
+        }
       }
 
-      // Nulls always last
       if (aVal === null && bVal === null) return 0;
       if (aVal === null) return 1;
       if (bVal === null) return -1;
@@ -121,7 +133,7 @@ export function FundTable({ funds, periods, returnMode }: FundTableProps) {
       const bn = bVal as number;
       return sortDir === "asc" ? an - bn : bn - an;
     });
-  }, [funds, sortKey, sortDir]);
+  }, [funds, sortKey, sortDir, activePeriods, primaryKey]);
 
   const totalPages = Math.ceil(sorted.length / pageSize);
   const paginated = sorted.slice(page * pageSize, (page + 1) * pageSize);
@@ -142,7 +154,7 @@ export function FundTable({ funds, periods, returnMode }: FundTableProps) {
   };
 
   const handleExportCSV = () => {
-    exportFundResultsCSV(sorted, periods);
+    exportFundResultsCSV(sorted, activePeriods);
   };
 
   const Th = ({
@@ -167,7 +179,6 @@ export function FundTable({ funds, periods, returnMode }: FundTableProps) {
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      {/* Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-200">
         <div className="flex items-center gap-2">
           <span className="text-sm text-slate-600">每頁顯示</span>
@@ -189,11 +200,10 @@ export function FundTable({ funds, periods, returnMode }: FundTableProps) {
           className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm transition-colors"
         >
           <Download className="w-3.5 h-3.5" />
-          下載基金回報 CSV
+          下載基金回報 CSV（全部年份）
         </button>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse min-w-[900px]">
           <thead>
@@ -208,27 +218,30 @@ export function FundTable({ funds, periods, returnMode }: FundTableProps) {
               <Th label="風險" sk="riskLevel" right />
               <Th label="規模(M)" sk="fundSizeMillion" right />
               <Th label="FER(%)" sk="fer" right />
-              <th
-                className="px-3 py-2.5 text-xs font-semibold text-slate-600 uppercase tracking-wide cursor-pointer hover:bg-slate-100 transition-colors text-right"
-                onClick={() => handleSort("periodReturn")}
-              >
-                <span className="inline-flex items-center flex-row-reverse gap-0.5">
-                  <SortIcon column="periodReturn" current={sortKey} dir={sortDir} />
-                  <span className="text-right">
-                    {returnMode === "annualized" ? "年化" : "累積"}回報
-                    <br />
-                    <span className="text-slate-400 font-normal normal-case">
-                      {periodLabel}
+              {activePeriods.map((period) => (
+                <th
+                  key={periodKey(period)}
+                  className="px-3 py-2.5 text-xs font-semibold text-slate-600 uppercase tracking-wide cursor-pointer hover:bg-slate-100 transition-colors text-right"
+                  onClick={() => handleSort(periodKey(period))}
+                >
+                  <span className="inline-flex items-center flex-row-reverse gap-0.5">
+                    <SortIcon column={periodKey(period)} current={sortKey} dir={sortDir} />
+                    <span className="text-right">
+                      {returnMode === "annualized" ? "年化" : "累積"}回報
+                      <br />
+                      <span className="text-slate-400 font-normal normal-case">
+                        {period.label}
+                      </span>
                     </span>
                   </span>
-                </span>
-              </th>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {paginated.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={8 + activePeriods.length} className="px-4 py-8 text-center text-slate-400">
                   暫無符合條件的基金
                 </td>
               </tr>
@@ -272,9 +285,11 @@ export function FundTable({ funds, periods, returnMode }: FundTableProps) {
                         {fund.fer !== null ? `${fund.fer.toFixed(2)}%` : "—"}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-right">
-                      <ReturnCell value={fund.periodReturn} />
-                    </td>
+                    {activePeriods.map((period) => (
+                      <td key={periodKey(period)} className="px-3 py-2 text-right">
+                        <ReturnCell value={getPeriodValue(fund, periodKey(period))} />
+                      </td>
+                    ))}
                   </tr>
                 );
               })
@@ -283,7 +298,6 @@ export function FundTable({ funds, periods, returnMode }: FundTableProps) {
         </table>
       </div>
 
-      {/* Pagination */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-slate-200">
         <div className="text-sm text-slate-500">
           第 {page + 1} 頁，共 {totalPages} 頁

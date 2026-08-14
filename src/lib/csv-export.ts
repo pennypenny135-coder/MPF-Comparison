@@ -1,4 +1,5 @@
 import type { FundWithReturn, ReturnPeriod, TrusteeStats } from "@/types/mpf";
+import { periodKey } from "@/lib/returns";
 
 export function downloadCsv(rows: Record<string, unknown>[], filename = "mpf-comparison.csv") {
   if (!rows.length) return;
@@ -14,19 +15,32 @@ export function downloadCsv(rows: Record<string, unknown>[], filename = "mpf-com
 }
 
 export function exportFundResultsCSV(funds: FundWithReturn[], periods?: ReturnPeriod[]) {
-  const rows = funds.map((fund) => ({
-    計劃: fund.scheme,
-    成分基金: fund.fundName,
-    受託人: fund.trustee,
-    基金類別: fund.fundType,
-    推出日期: fund.launchDate ?? "",
-    基金規模_百萬港元: fund.fundSizeMillion ?? "",
-    風險級別: fund.riskLevel ?? "",
-    基金開支比率: fund.fer ?? "",
-    回報: fund.periodReturn ?? "",
-    年化回報: fund.annualizedReturn ?? "",
-    年份區間: periods && periods.length ? periods.map((p) => p.label).join(", ") : "",
-  }));
+  const activePeriods = periods && periods.length > 0 ? periods : [];
+
+  const rows = funds.map((fund) => {
+    const base: Record<string, unknown> = {
+      計劃: fund.scheme,
+      成分基金: fund.fundName,
+      受託人: fund.trustee,
+      基金類別: fund.fundType,
+      推出日期: fund.launchDate ?? "",
+      基金規模_百萬港元: fund.fundSizeMillion ?? "",
+      風險級別: fund.riskLevel ?? "",
+      基金開支比率: fund.fer ?? "",
+    };
+
+    if (activePeriods.length > 0) {
+      for (const period of activePeriods) {
+        const value = fund.returnsByPeriod?.[periodKey(period)];
+        base[`回報_${period.label}`] = value ?? "";
+      }
+    } else {
+      base["回報"] = fund.periodReturn ?? "";
+    }
+
+    return base;
+  });
+
   downloadCsv(rows, "mpf-fund-results.csv");
 }
 

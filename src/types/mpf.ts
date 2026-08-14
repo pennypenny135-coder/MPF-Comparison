@@ -35,6 +35,7 @@ export interface FundWithReturn extends FundRecord {
   periodReturn: number | null;
   annualizedReturn: number | null;
   availableYears: number[];
+  returnsByPeriod: Record<string, number | null>;
 }
 
 export interface TrusteeStats {

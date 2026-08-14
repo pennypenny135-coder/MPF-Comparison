@@ -15,7 +15,7 @@ import { Toaster, toast } from "sonner";
 import type { Dataset, ReturnPeriod, ReturnMode, FundWithReturn } from "@/types/mpf";
 import {
   generateDefaultPeriods,
-  enrichFundsWithReturns,
+  enrichFundsWithMultiPeriodReturns,
   getUniqueTrustees,
   getUniqueFundTypes,
   getUniqueRiskLevels,
@@ -41,17 +41,14 @@ export default function HomePage() {
   const [showUpload, setShowUpload] = useState(false);
   const [showStats, setShowStats] = useState(false);
 
-  // Period & mode
   const [selectedPeriods, setSelectedPeriods] = useState<ReturnPeriod[]>([]);
   const [returnMode, setReturnMode] = useState<ReturnMode>("cumulative");
 
-  // Filters
   const [selectedTrustees, setSelectedTrustees] = useState<string[]>([]);
   const [selectedFundTypes, setSelectedFundTypes] = useState<string[]>([]);
   const [selectedRiskLevels, setSelectedRiskLevels] = useState<number[]>([]);
   const [searchText, setSearchText] = useState("");
 
-  // ─── Load sample dataset ──────────────────────────────────────────────────
   const loadSample = useCallback(async () => {
     try {
       const res = await fetch("/sample/Fund_Information_Table_result-2.xlsx");
@@ -68,7 +65,6 @@ export default function HomePage() {
     return null;
   }, []);
 
-  // ─── Initialize ───────────────────────────────────────────────────────────
   useEffect(() => {
     const init = async () => {
       setIsLoading(true);
@@ -110,7 +106,6 @@ export default function HomePage() {
     init();
   }, [loadSample]);
 
-  // ─── Handle confirm upload ────────────────────────────────────────────────
   const handleConfirmUpload = async (newDataset: Dataset) => {
     try {
       await saveDataset(newDataset);
@@ -128,7 +123,6 @@ export default function HomePage() {
     }
   };
 
-  // ─── Clear data ───────────────────────────────────────────────────────────
   const handleClear = async () => {
     await clearActiveDataset();
     const sampleDs = await loadSample();
@@ -147,7 +141,6 @@ export default function HomePage() {
     toast.info("已恢復 Sample 資料");
   };
 
-  // ─── Persist prefs ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isLoading) {
       saveUIPreferences({
@@ -163,7 +156,6 @@ export default function HomePage() {
     }
   }, [selectedPeriods, selectedTrustees, selectedFundTypes, selectedRiskLevels, returnMode, isLoading]);
 
-  // ─── Computed values ──────────────────────────────────────────────────────
   const allTrustees = useMemo(
     () => (dataset ? getUniqueTrustees(dataset) : []),
     [dataset]
@@ -198,9 +190,9 @@ export default function HomePage() {
   }, [dataset, selectedTrustees, selectedFundTypes, selectedRiskLevels, searchText]);
 
   const fundsWithReturn: FundWithReturn[] = useMemo(() => {
-    if (!primaryPeriod) return [];
-    return enrichFundsWithReturns(filteredRecords, primaryPeriod, returnMode);
-  }, [filteredRecords, primaryPeriod, returnMode]);
+    if (selectedPeriods.length === 0) return [];
+    return enrichFundsWithMultiPeriodReturns(filteredRecords, selectedPeriods, returnMode);
+  }, [filteredRecords, selectedPeriods, returnMode]);
 
   const sortedFunds: FundWithReturn[] = useMemo(() => {
     return [...fundsWithReturn].sort((a, b) => {
@@ -239,7 +231,6 @@ export default function HomePage() {
     <div className="min-h-screen bg-slate-100">
       <Toaster richColors position="top-right" />
 
-      {/* ─── Header ─────────────────────────────────────────────────────── */}
       <header className="bg-blue-900 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -291,7 +282,6 @@ export default function HomePage() {
             </nav>
           </div>
 
-          {/* Dataset info */}
           {dataset && (
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <span
@@ -317,7 +307,6 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* ─── Sample download hint ─────────────────────────────────────── */}
       {dataset?.isSample && (
         <div className="bg-amber-50 border-b border-amber-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-wrap items-center gap-3">
@@ -336,7 +325,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ─── Main ────────────────────────────────────────────────────── */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-5">
         {!dataset ? (
           <div className="text-center py-20">
@@ -363,7 +351,6 @@ export default function HomePage() {
           </div>
         ) : (
           <>
-            {/* KPI Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <KPICard
                 label="基金總數"
@@ -387,7 +374,6 @@ export default function HomePage() {
               />
             </div>
 
-            {/* Period Controls */}
             <PeriodControls
               availableYears={dataset.years}
               selectedPeriods={selectedPeriods}
@@ -403,7 +389,6 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* Filter & Table */}
             {selectedPeriods.length > 0 && (
               <>
                 <FilterPanel
@@ -423,7 +408,6 @@ export default function HomePage() {
                   totalCount={dataset.rowCount}
                 />
 
-                {/* Stats toggle */}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowStats((v) => !v)}
@@ -441,7 +425,6 @@ export default function HomePage() {
                   </button>
                 </div>
 
-                {/* Stats panel */}
                 {showStats && primaryPeriod && (
                   <TrusteeStatsPanel
                     funds={sortedFunds}
@@ -451,7 +434,6 @@ export default function HomePage() {
                   />
                 )}
 
-                {/* Fund Table */}
                 <FundTable
                   funds={sortedFunds}
                   periods={selectedPeriods}
@@ -463,7 +445,6 @@ export default function HomePage() {
         )}
       </main>
 
-      {/* Upload modal */}
       {showUpload && (
         <UploadPanel
           onConfirm={handleConfirmUpload}
@@ -474,7 +455,6 @@ export default function HomePage() {
   );
 }
 
-// ─── KPI Card ─────────────────────────────────────────────────────────────────
 function KPICard({
   label,
   value,

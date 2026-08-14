@@ -74,12 +74,10 @@ export function generateDefaultPeriods(years: number[]): ReturnPeriod[] {
     });
   };
 
-  // Full range
   if (earliestYear !== latestYear) {
     addPeriod(earliestYear, latestYear);
   }
 
-  // Last 5, 4, 3, 2 years relative to latestYear
   const offsets = [4, 3, 2, 1];
   for (const offset of offsets) {
     const startYear = latestYear - offset;
@@ -88,7 +86,6 @@ export function generateDefaultPeriods(years: number[]): ReturnPeriod[] {
     }
   }
 
-  // Latest year only
   addPeriod(latestYear, latestYear);
 
   return periods;
@@ -101,37 +98,74 @@ export function buildPeriodLabel(startYear: number, endYear: number): string {
   return `${startYear}–${endYear}（${yearCount} 年）`;
 }
 
-// ─── Enrich funds with returns ────────────────────────────────────────────────
+export function periodKey(period: ReturnPeriod): string {
+  return `${period.startYear}-${period.endYear}`;
+}
+
+// ─── Enrich funds with returns (single period, kept for compatibility) ────────
 export function enrichFundsWithReturns(
   records: FundRecord[],
   period: ReturnPeriod,
   mode: ReturnMode
 ): FundWithReturn[] {
-  const years = period.endYear - period.startYear + 1;
+  return enrichFundsWithMultiPeriodReturns(records, [period], mode).map((fund) => ({
+    ...fund,
+    periodReturn: fund.returnsByPeriod[periodKey(period)] ?? null,
+  }));
+}
+
+// ─── Enrich funds with returns across multiple periods ────────────────────────
+export function enrichFundsWithMultiPeriodReturns(
+  records: FundRecord[],
+  periods: ReturnPeriod[],
+  mode: ReturnMode
+): FundWithReturn[] {
+  const primaryPeriod = periods[0];
 
   return records.map((record) => {
     const availableYears = Object.keys(record.annualReturns)
       .map(Number)
       .filter((y) => record.annualReturns[y] !== null);
 
-    const cumReturn = calculateCumulativeReturn(
-      record.annualReturns,
-      period.startYear,
-      period.endYear
-    );
+    const returnsByPeriod: Record<string, number | null> = {};
 
-    let annualizedReturn: number | null = null;
-    if (cumReturn !== null) {
-      annualizedReturn = calculateAnnualizedReturn(cumReturn, years);
+    for (const period of periods) {
+      const years = period.endYear - period.startYear + 1;
+      const cumReturn = calculateCumulativeReturn(
+        record.annualReturns,
+        period.startYear,
+        period.endYear
+      );
+      const annualizedReturn =
+        cumReturn !== null ? calculateAnnualizedReturn(cumReturn, years) : null;
+      returnsByPeriod[periodKey(period)] =
+        mode === "annualized" ? annualizedReturn : cumReturn;
     }
 
-    const periodReturn = mode === "annualized" ? annualizedReturn : cumReturn;
+    let primaryCumReturn: number | null = null;
+    let primaryAnnualizedReturn: number | null = null;
+    if (primaryPeriod) {
+      const years = primaryPeriod.endYear - primaryPeriod.startYear + 1;
+      primaryCumReturn = calculateCumulativeReturn(
+        record.annualReturns,
+        primaryPeriod.startYear,
+        primaryPeriod.endYear
+      );
+      primaryAnnualizedReturn =
+        primaryCumReturn !== null
+          ? calculateAnnualizedReturn(primaryCumReturn, years)
+          : null;
+    }
+
+    const periodReturn =
+      mode === "annualized" ? primaryAnnualizedReturn : primaryCumReturn;
 
     return {
       ...record,
       periodReturn,
-      annualizedReturn,
+      annualizedReturn: primaryAnnualizedReturn,
       availableYears,
+      returnsByPeriod,
     };
   });
 }
@@ -141,26 +175,21 @@ export function computeTrusteeStats(
   funds: FundWithReturn[],
   topN: number
 ): TrusteeStats[] {
-  // Only include funds with valid periodReturn
   const eligible = funds.filter(
     (f) => f.periodReturn !== null && Number.isFinite(f.periodReturn)
   );
 
-  // Sort descending
   const sorted = [...eligible].sort(
     (a, b) => (b.periodReturn ?? -Infinity) - (a.periodReturn ?? -Infinity)
   );
 
-  // Top N
   const topFunds = sorted.slice(0, topN);
 
-  // Group by trustee
   const trusteeMap = new Map<
     string,
     { total: number; eligible: number; topFunds: FundWithReturn[] }
   >();
 
-  // Count total funds per trustee
   for (const f of funds) {
     const existing = trusteeMap.get(f.trustee) ?? {
       total: 0,
@@ -171,19 +200,16 @@ export function computeTrusteeStats(
     trusteeMap.set(f.trustee, existing);
   }
 
-  // Count eligible funds per trustee
   for (const f of eligible) {
     const existing = trusteeMap.get(f.trustee);
     if (existing) existing.eligible++;
   }
 
-  // Count top N funds per trustee
   for (const f of topFunds) {
     const existing = trusteeMap.get(f.trustee);
     if (existing) existing.topFunds.push(f);
   }
 
-  // Build stats
   const stats: TrusteeStats[] = [];
 
   for (const [trustee, data] of trusteeMap.entries()) {
@@ -214,7 +240,6 @@ export function computeTrusteeStats(
     });
   }
 
-  // Sort by topNCount desc, then avgReturn desc
   return stats.sort((a, b) => {
     if (b.topNCount !== a.topNCount) return b.topNCount - a.topNCount;
     const aAvg = a.averagePeriodReturn ?? -Infinity;
