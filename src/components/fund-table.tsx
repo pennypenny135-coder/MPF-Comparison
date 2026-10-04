@@ -5,6 +5,7 @@ import { ArrowUpDown, ArrowUp, ArrowDown, Download } from "lucide-react";
 import type { FundWithReturn, ReturnPeriod, ReturnMode } from "@/types/mpf";
 import { exportFundResultsCSV } from "@/lib/csv-export";
 import { periodKey } from "@/lib/returns";
+import { getOfficialFundUrl } from "@/lib/fund-links";
 
 interface FundTableProps {
   funds: FundWithReturn[];
@@ -248,6 +249,7 @@ export function FundTable({ funds, periods, returnMode }: FundTableProps) {
             ) : (
               paginated.map((fund, idx) => {
                 const globalIdx = page * pageSize + idx;
+                const officialUrl = getOfficialFundUrl(fund);
                 return (
                   <tr
                     key={fund.id}
@@ -263,7 +265,19 @@ export function FundTable({ funds, periods, returnMode }: FundTableProps) {
                       <span className="text-slate-700 text-sm">{fund.scheme || "—"}</span>
                     </td>
                     <td className="px-3 py-2">
-                      <span className="text-slate-800 text-sm">{fund.fundName}</span>
+                      {officialUrl ? (
+                        <a
+                          href={officialUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="查看受託人官方基金價格／最新走勢"
+                          className="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                        >
+                          {fund.fundName}
+                        </a>
+                      ) : (
+                        <span className="text-slate-800 text-sm">{fund.fundName}</span>
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       <span className="text-slate-600 text-sm">{fund.fundType || "—"}</span>
