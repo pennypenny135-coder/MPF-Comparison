@@ -10,7 +10,7 @@ const SCHEME_FUND_PRICE_LINKS: Array<{
 }> = [
   {
     pattern: /海通MPF退休金/i,
-    url: "https://www.hsbc.com.hk/mpf/tool/unit-prices/",
+    url: "https://gthtam.com.hk/mpf/zh-cht",
   },
   {
     pattern: /恒生強積金智選計劃/i,
